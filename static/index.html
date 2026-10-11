@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fake News Detector</title>
+<style>
+  :root {
+    --bg: #fafaf9; --fg: #1c1c1a; --muted: #6f6f6a; --line: #e4e4e0; --card: #fff;
+    --fake: #c8362f; --real: #0d8a76; --unsure: #8a8a84; --accent: #1c1c1a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --fg: #ecece8; --muted: #9a9a94; --line: #2c2c29; --card: #1d1d1b;
+            --fake: #ee6a62; --real: #3cc5ad; --unsure: #9a9a94; --accent: #ecece8; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 56px 20px 80px; }
+  h1 { font-size: 1.5rem; font-weight: 600; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+  textarea { width: 100%; min-height: 180px; padding: 14px; resize: vertical; font: inherit;
+             color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .row { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; padding: 9px 18px;
+           border: 1px solid var(--line); background: transparent; color: inherit; }
+  button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 500; }
+  button:disabled { opacity: .5; cursor: default; }
+  .link { border: 0; padding: 0; color: var(--muted); text-decoration: underline; font-size: .9rem; }
+  .spacer { flex: 1; }
+  #err { color: var(--fake); margin-top: 12px; min-height: 1.4em; }
+
+  #result { display: none; margin-top: 28px; }
+  .verdict { font-size: 2rem; font-weight: 650; letter-spacing: -.02em; margin: 0; }
+  .verdict small { font-size: 1rem; font-weight: 400; color: var(--muted); margin-left: 8px; }
+  .bar { height: 8px; border-radius: 4px; background: var(--line); margin: 14px 0 4px; position: relative; overflow: hidden; }
+  .bar i { position: absolute; inset: 0 auto 0 0; background: var(--c); border-radius: 4px; transition: width .4s; }
+  .scale { display: flex; justify-content: space-between; font-size: .8rem; color: var(--muted); }
+  .note { color: var(--muted); font-size: .9rem; margin: 10px 0 0; }
+
+  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+       font-weight: 600; margin: 32px 0 10px; }
+  .votes { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; font-size: .95rem; }
+  .votes span:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; }
+  .tag-fake { color: var(--fake); } .tag-real { color: var(--real); }
+
+  #hl { padding: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+        max-height: 280px; overflow-y: auto; line-height: 1.9; white-space: pre-wrap; }
+  mark { color: inherit; border-radius: 4px; padding: 1px 3px; }
+  .legend { font-size: .85rem; color: var(--muted); margin-bottom: 8px; }
+  .legend b { padding: 1px 6px; border-radius: 4px; font-weight: 400; color: var(--fg); }
+
+  details { margin-top: 48px; border-top: 1px solid var(--line); padding-top: 16px; }
+  summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: .9rem; font-variant-numeric: tabular-nums; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 500; }
+  @media (max-width: 480px) { table { font-size: .78rem; } th, td { padding: 6px 3px; } main { padding-top: 36px; } }
+  footer { margin-top: 28px; font-size: .8rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Fake News Detector</h1>
+  <p class="sub">Paste an article. Seven models vote on whether it reads as real or fake.</p>
+
+  <textarea id="text" placeholder="Paste a headline and article body…"></textarea>
+  <div class="row">
+    <button class="primary" id="go">Analyze</button>
+    <button class="link" data-ex="0">Fake sample</button>
+    <button class="link" data-ex="1">Real sample</button>
+    <span class="spacer"></span>
+    <button class="link" id="clear">Clear</button>
+  </div>
+  <div id="err" role="alert"></div>
+
+  <section id="result">
+    <p class="verdict" id="verdict"></p>
+    <div class="bar"><i id="fill"></i></div>
+    <div class="scale"><span>Fake</span><span id="pct"></span><span>Real</span></div>
+    <p class="note" id="note"></p>
+
+    <h2>Model votes</h2>
+    <div class="votes" id="votes"></div>
+
+    <h2>Words that influenced the result</h2>
+    <div class="legend"><b style="background:color-mix(in srgb,var(--fake) 30%,transparent)">fake-leaning</b>
+      <b style="background:color-mix(in srgb,var(--real) 30%,transparent)">real-leaning</b></div>
+    <div id="hl"></div>
+  </section>
+
+  <details>
+    <summary>Model performance</summary>
+    <table id="perf"></table>
+    <footer id="foot"></footer>
+  </details>
+
+  <footer>Scores writing style and vocabulary learned from past articles. It does not check facts — use it as a screening aid, not proof.</footer>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pct = x => (x * 100).toFixed(1) + '%';
+
+async function analyze() {
+  $('err').textContent = '';
+  const text = $('text').value;
+  $('go').disabled = true; $('go').textContent = 'Analyzing…';
+  try {
+    const r = await fetch('/api/predict', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                           body: JSON.stringify({text})});
+    const d = await r.json();
+    if (!r.ok) { $('err').textContent = d.error; $('result').style.display = 'none'; return; }
+    render(text, d);
+  } catch (e) {
+    $('err').textContent = 'Could not reach the server. Is server.py running?';
+  } finally { $('go').disabled = false; $('go').textContent = 'Analyze'; }
+}
+
+function render(text, d) {
+  const colour = {fake: 'var(--fake)', real: 'var(--real)', uncertain: 'var(--unsure)'}[d.verdict];
+  const conf = Math.max(d.p_real, 1 - d.p_real);
+  $('result').style.display = 'block';
+  $('verdict').style.color = colour;
+  $('verdict').innerHTML = d.verdict === 'uncertain'
+    ? 'Uncertain' : `${d.verdict === 'real' ? 'Real' : 'Fake'}<small>${pct(conf)} confidence</small>`;
+  $('fill').style.setProperty('--c', colour);
+  $('fill').style.width = (d.p_real * 100) + '%';
+  $('pct').textContent = `P(real) ${pct(d.p_real)}`;
+
+  const nReal = d.votes.filter(v => v.p_real > .5).length;
+  const notes = [];
+  if (d.verdict === 'uncertain') notes.push('Too close to call — verify with a fact-checker.');
+  if (d.short) notes.push('Short input: models were trained on full articles, so this is less reliable.');
+  if (nReal !== 0 && nReal !== d.votes.length) notes.push(`Models disagree (${nReal} of ${d.votes.length} say real).`);
+  $('note').textContent = notes.join(' ');
+
+  $('votes').innerHTML = d.votes.map(v => {
+    const real = v.p_real > .5;
+    return `<span>${esc(v.model)}</span><span class="${real ? 'tag-real' : 'tag-fake'}">${real ? 'Real' : 'Fake'} · ${(v.p_real * 100).toFixed(0)}%</span>`;
+  }).join('');
+
+  // highlight the strongest ~15% of words by |contribution|
+  const mags = Object.values(d.words).map(Math.abs).sort((a, b) => a - b);
+  const thr = mags.length ? mags[Math.floor(mags.length * .85)] : 0;
+  $('hl').innerHTML = text.split(/(\s+)/).map(tok => {
+    const c = d.words[tok.toLowerCase().replace(/[^a-z]/g, '')] || 0;
+    if (!tok.trim() || Math.abs(c) < thr || !thr) return esc(tok);
+    const col = c > 0 ? 'var(--real)' : 'var(--fake)';
+    const a = Math.round(Math.min(.55, .15 + Math.abs(c) / (thr * 6)) * 100);
+    return `<mark title="${c > 0 ? 'real' : 'fake'}-leaning (${c.toFixed(2)})" style="background:color-mix(in srgb,${col} ${a}%,transparent)">${esc(tok)}</mark>`;
+  }).join('');
+  $('result').scrollIntoView({behavior: 'smooth', block: 'nearest'});
+}
+
+async function loadExample(label) {
+  const d = await (await fetch('/api/example?label=' + label)).json();
+  $('text').value = d.text; $('result').style.display = 'none'; $('err').textContent = '';
+}
+
+async function loadInfo() {
+  const d = await (await fetch('/api/info')).json();
+  const rows = d.models.sort((a, b) => b.f1 - a.f1);
+  $('perf').innerHTML = '<tr><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th></tr>' +
+    rows.map(m => `<tr><td>${esc(m.name)}</td><td>${pct(m.accuracy)}</td><td>${pct(m.precision)}</td><td>${pct(m.recall)}</td><td>${pct(m.f1)}</td></tr>`).join('');
+  $('foot').textContent = `Held-out test set of ${d.n_test.toLocaleString()} articles · ${d.dataset}`;
+}
+
+$('go').onclick = analyze;
+$('clear').onclick = () => { $('text').value = ''; $('result').style.display = 'none'; $('err').textContent = ''; };
+document.querySelectorAll('[data-ex]').forEach(b => b.onclick = () => loadExample(b.dataset.ex === '0' ? 0 : 1));
+$('text').addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') analyze(); });
+loadInfo();
+</script>
+</body>
+</html>
