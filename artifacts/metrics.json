@@ -1972,5 +1972,8 @@
  "test_size": 0.2,
  "seed": 42,
  "dataset": "Fake or Real News (McIntire, 6.3k articles)",
- "trained_at": "2026-10-10 10:31"
+ "trained_at": "2026-10-10 10:31",
+ "preprocess_version": "2",
+ "selected": "Logistic Regression",
+ "short_max_words": 60
 }

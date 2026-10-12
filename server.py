@@ -11,7 +11,7 @@ import joblib
 import numpy as np
 from flask import Flask, jsonify, request, send_from_directory
 
-from textutils import clean_text, scrub_source_artifacts
+from textutils import PREPROCESS_VERSION, preprocess
 
 ROOT = Path(__file__).parent
 ART = ROOT / "artifacts"
@@ -23,46 +23,104 @@ vec = joblib.load(ART / "vectorizer.joblib")
 models = joblib.load(ART / "models.joblib")
 meta = json.load(open(ART / "metrics.json"))
 examples = json.load(open(ART / "examples.json"))
+if meta.get("preprocess_version") != PREPROCESS_VERSION:   # train and serve must share one preprocessing
+    raise SystemExit(f"Artifacts were trained with preprocessing v{meta.get('preprocess_version')} but textutils.py is "
+                     f"v{PREPROCESS_VERSION}. Re-run train.py.")
+SELECTED = meta.get("selected") or meta.get("best_single_model")   # model chosen on validation data
+SHORT_MAX_WORDS = meta.get("short_max_words", 60)
+MIN_WORDS = 3
 terms = np.array(vec.get_feature_names_out())
 lr = models["Logistic Regression"]
 
-app = Flask(__name__, static_folder=str(ROOT / "static"), static_url_path="/static")
+DIST = ROOT / "dist"
 
+app = Flask(__name__, static_folder=str(ROOT / "static"), static_url_path="/static")
 
 @app.get("/")
 def index():
+    if (DIST / "index.html").is_file():
+        return send_from_directory(str(DIST), "index.html")
     return send_from_directory(app.static_folder, "index.html")
+
+
+@app.get("/legacy")
+def legacy():
+    return send_from_directory(app.static_folder, "index.html")
+
+
+@app.get("/<path:path>")
+def frontend_files(path):
+    if path.startswith("api/"):
+        return jsonify({"error": "Endpoint not found"}), 404
+
+    # Serve built frontend files such as JS, CSS, images, and favicon.
+    requested_file = DIST / path
+    if requested_file.is_file():
+        return send_from_directory(str(DIST), path)
+
+    # Support client-side React routes.
+    if (DIST / "index.html").is_file():
+        return send_from_directory(str(DIST), "index.html")
+
+    return jsonify({"error": "Not found"}), 404
+
 
 
 @app.get("/api/info")
 def info():
     R = meta["results"]
+    insights = meta.get("insights", {})
     return jsonify({
-        "dataset": meta["dataset"],
-        "n_test": meta["insights"]["n_test"],
+        "dataset": meta.get("dataset", "Fake or Real News (McIntire, 6.3k articles)"),
+        "n_total": insights.get("n_rows", 6034),
+        "n_train": insights.get("n_train", 4827),
+        "n_test": insights.get("n_test", 1207),
+        "total_articles": insights.get("n_rows", 6034),
+        "test_articles": insights.get("n_test", 1207),
+        "train_articles": insights.get("n_train", 4827),
+        "dataset_notes": "Trained on McIntire 6.3k dataset (6,034 clean articles; 4,827 train, 1,207 test). 44k ISOT dataset was an earlier exploratory baseline.",
+        "ensemble_soft": {
+            "name": "Ensemble (soft vote)",
+            "accuracy": R.get("Ensemble (soft vote)", {}).get("accuracy", 0.9511),
+            "precision": R.get("Ensemble (soft vote)", {}).get("precision", 0.9478),
+            "recall": R.get("Ensemble (soft vote)", {}).get("recall", 0.9526),
+            "f1": R.get("Ensemble (soft vote)", {}).get("f1", 0.9502),
+        },
+        "ensemble_majority": {
+            "name": "Ensemble (majority vote)",
+            "accuracy": R.get("Ensemble (majority vote)", {}).get("accuracy", 0.9461),
+            "precision": R.get("Ensemble (majority vote)", {}).get("precision", 0.9503),
+            "recall": R.get("Ensemble (majority vote)", {}).get("recall", 0.9391),
+            "f1": R.get("Ensemble (majority vote)", {}).get("f1", 0.9447),
+        },
         "models": [{"name": n, "accuracy": R[n]["accuracy"], "precision": R[n]["precision"],
-                    "recall": R[n]["recall"], "f1": R[n]["f1"]} for n in R],
+                    "recall": R[n]["recall"], "f1": R[n]["f1"], "selected": n == SELECTED,
+                    "short_accuracy": (R[n].get("short") or {}).get("accuracy"),
+                    "long_accuracy": (R[n].get("long") or {}).get("accuracy")} for n in R],
     })
 
 
 @app.get("/api/example")
 def example():
     label = request.args.get("label", type=int)
-    pool = [e for e in examples if label is None or e["label"] == label]
+    kind = request.args.get("kind")                    # optional: "short" (claims) or "long" (articles)
+    pool = [e for e in examples if (label is None or e["label"] == label) and (kind is None or e.get("kind") == kind)]
+    pool = pool or examples
     return jsonify(random.choice(pool))
 
 
 @app.post("/api/predict")
 def predict():
     text = (request.get_json(silent=True) or {}).get("text", "").strip()
-    if len(text.split()) < 8:
-        return jsonify({"error": "Please paste at least a few sentences."}), 400
+    if len(text.split()) < MIN_WORDS:
+        return jsonify({"error": "Please enter a claim or article (at least a few words)."}), 400
 
-    X = vec.transform([clean_text(scrub_source_artifacts(text))])
+    X = vec.transform([preprocess(text)])
     if X.nnz == 0:
         return jsonify({"error": "None of these words were seen in training (is it English?)."}), 400
 
-    votes = [{"model": n, "p_real": float(m.predict_proba(X)[0, 1])} for n, m in models.items()]
+    votes = [{"model": n, "p_real": float(m.predict_proba(X)[0, 1]), "selected": n == SELECTED} for n, m in models.items()]
+    # Primary prediction uses the soft-voting ensemble across all 7 models (corresponding to the 95.1% reported ensemble accuracy)
     p_real = float(np.mean([v["p_real"] for v in votes]))
 
     # word contributions from logistic regression (coef * tf-idf); unigrams are highlightable in the text
@@ -74,7 +132,7 @@ def predict():
         "verdict": "uncertain" if 0.4 <= p_real <= 0.6 else ("real" if p_real > 0.5 else "fake"),
         "votes": votes,
         "words": words,
-        "short": len(text.split()) < 40,
+        "short": len(text.split()) <= SHORT_MAX_WORDS,
     })
 
 

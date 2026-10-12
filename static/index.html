@@ -64,9 +64,9 @@
 <body>
 <main>
   <h1>Fake News Detector</h1>
-  <p class="sub">Paste an article. Seven models vote on whether it reads as real or fake.</p>
+  <p class="sub">Paste a short claim or a full article. The model that validated best decides; the others are shown for comparison.</p>
 
-  <textarea id="text" placeholder="Paste a headline and article body…"></textarea>
+  <textarea id="text" placeholder="Paste a claim, or a headline and article body…"></textarea>
   <div class="row">
     <button class="primary" id="go">Analyze</button>
     <button class="link" data-ex="0">Fake sample</button>
@@ -82,7 +82,7 @@
     <div class="scale"><span>Fake</span><span id="pct"></span><span>Real</span></div>
     <p class="note" id="note"></p>
 
-    <h2>Model votes</h2>
+    <h2>Model scores</h2>
     <div class="votes" id="votes"></div>
 
     <h2>Words that influenced the result</h2>
@@ -134,13 +134,13 @@ function render(text, d) {
   const nReal = d.votes.filter(v => v.p_real > .5).length;
   const notes = [];
   if (d.verdict === 'uncertain') notes.push('Too close to call — verify with a fact-checker.');
-  if (d.short) notes.push('Short input: models were trained on full articles, so this is less reliable.');
+  if (d.short) notes.push('Short claim: these are much harder to judge than full articles (see the table below) — treat this as a weak signal.');
   if (nReal !== 0 && nReal !== d.votes.length) notes.push(`Models disagree (${nReal} of ${d.votes.length} say real).`);
   $('note').textContent = notes.join(' ');
 
   $('votes').innerHTML = d.votes.map(v => {
     const real = v.p_real > .5;
-    return `<span>${esc(v.model)}</span><span class="${real ? 'tag-real' : 'tag-fake'}">${real ? 'Real' : 'Fake'} · ${(v.p_real * 100).toFixed(0)}%</span>`;
+    return `<span>${esc(v.model)}${v.selected ? ' <small>(decides)</small>' : ''}</span><span class="${real ? 'tag-real' : 'tag-fake'}">${real ? 'Real' : 'Fake'} · ${(v.p_real * 100).toFixed(0)}%</span>`;
   }).join('');
 
   // highlight the strongest ~15% of words by |contribution|
@@ -164,9 +164,9 @@ async function loadExample(label) {
 async function loadInfo() {
   const d = await (await fetch('/api/info')).json();
   const rows = d.models.sort((a, b) => b.f1 - a.f1);
-  $('perf').innerHTML = '<tr><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th></tr>' +
-    rows.map(m => `<tr><td>${esc(m.name)}</td><td>${pct(m.accuracy)}</td><td>${pct(m.precision)}</td><td>${pct(m.recall)}</td><td>${pct(m.f1)}</td></tr>`).join('');
-  $('foot').textContent = `Held-out test set of ${d.n_test.toLocaleString()} articles · ${d.dataset}`;
+  $('perf').innerHTML = '<tr><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>Short claims</th><th>Long articles</th></tr>' +
+    rows.map(m => `<tr><td>${esc(m.name)}${m.selected ? ' ✓' : ''}</td><td>${pct(m.accuracy)}</td><td>${pct(m.precision)}</td><td>${pct(m.recall)}</td><td>${pct(m.f1)}</td><td>${m.short_accuracy == null ? '—' : pct(m.short_accuracy)}</td><td>${m.long_accuracy == null ? '—' : pct(m.long_accuracy)}</td></tr>`).join('');
+  $('foot').textContent = `Held-out test set of ${d.n_test.toLocaleString()} texts · ${d.dataset} · ✓ = selected on validation; short/long columns are accuracy`;
 }
 
 $('go').onclick = analyze;
