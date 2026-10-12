@@ -540,13 +540,13 @@ function Analyzer() {
 }
 
 const defaultModels = [
-  { name: "SVM (Linear)", accuracy: 95.0, precision: 95.5, recall: 94.2 },
-  { name: "Logistic Regression", accuracy: 94.7, precision: 95.8, recall: 93.2 },
-  { name: "Passive Aggressive", accuracy: 94.7, precision: 95.4, recall: 93.7 },
-  { name: "Naive Bayes", accuracy: 91.3, precision: 91.0, recall: 91.2 },
-  { name: "KNN", accuracy: 90.8, precision: 85.7, recall: 97.5 },
-  { name: "Random Forest", accuracy: 90.1, precision: 91.0, recall: 88.7 },
-  { name: "Decision Tree", accuracy: 81.4, precision: 82.6, recall: 78.5 },
+  { name: "SVM (Linear)", accuracy: 90.6, precision: 91.5, recall: 90.5 },
+  { name: "Logistic Regression", accuracy: 90.4, precision: 91.7, recall: 90.0 },
+  { name: "Random Forest", accuracy: 90.0, precision: 92.0, recall: 88.7 },
+  { name: "Passive Aggressive", accuracy: 89.8, precision: 90.3, recall: 90.4 },
+  { name: "Naive Bayes", accuracy: 87.8, precision: 89.4, recall: 87.2 },
+  { name: "Decision Tree", accuracy: 86.9, precision: 91.2, recall: 83.0 },
+  { name: "KNN", accuracy: 84.1, precision: 83.0, recall: 87.9 },
 ];
 
 function Accuracy() {
@@ -578,9 +578,10 @@ function Accuracy() {
 
   const ensembleAccuracy = ensembleModel
     ? `${(ensembleModel.accuracy * 100).toFixed(1)}%`
-    : "95.1%";
-  const evaluatedCount = (info?.test_articles || info?.n_test || 1207).toLocaleString();
-  const totalCount = (info?.total_articles || info?.n_total || 6034).toLocaleString();
+    : "90.4%";
+  const evaluatedCount = (info?.test_articles || info?.n_test || 7242).toLocaleString();
+  const totalCount = (info?.total_articles || info?.n_total || 48279).toLocaleString();
+  const trainCount = (info?.train_articles || info?.n_train || 33795).toLocaleString();
   const modelCount = modelList.length ? String(modelList.length) : "7";
 
   return (
@@ -715,7 +716,7 @@ function Accuracy() {
           </div>
 
           <p className="mt-5 text-xs leading-5 text-[#7a8980]">
-            Performance figures reflect held-out test evaluation on {info?.dataset || "Fake or Real News (McIntire, 6.3k articles)"} ({evaluatedCount} test articles out of {totalCount} total clean articles; 4,827 training articles). Earlier project exploratory drafts referenced the 44,898-article ISOT dataset. Results should support, not replace, independent source verification.
+            Performance figures reflect held-out test evaluation on {info?.dataset || "ISOT News + LIAR Benchmark (48.3k articles)"} ({evaluatedCount} test articles out of {totalCount} total clean articles; {trainCount} training articles). Combines long news articles (ISOT) and short claims (LIAR). Results should support, not replace, independent source verification.
           </p>
         </div>
       </main>
