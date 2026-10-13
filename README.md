@@ -1,82 +1,248 @@
-# Fake News Detector (DSE 2270 PBL-2)
+# Get Legit — Fake News Detection
 
-Detects whether a **short claim** or a **full article** reads as real or fake. Flask backend + one static HTML page.
-Trained on news articles (ISOT and/or the "Fake or Real News" CSV) plus the **LIAR** short-claim dataset.
+An end-to-end machine learning project that analyzes news text and predicts whether it resembles examples labeled **real** or **fake** in its training data. Get Legit combines natural language processing, multiple classical machine learning classifiers, ensemble evaluation, and a web-based interface.
 
-## Commands
+> **Important limitation:** Get Legit is an educational text-classification system, not a definitive fact-checker. It does not independently verify claims against authoritative sources. Predictions can be wrong, particularly for short claims that lack context.
 
-```bash
-pip install -r requirements.txt
+## Features
 
-# 1. get LIAR (downloads + verifies 12,836 statements into data/liar/)
-python fetch_liar.py
+- Binary classification of news text as real or fake.
+- Combined dataset containing long-form news articles and short political claims.
+- Text preprocessing and TF-IDF feature extraction.
+- Seven classical machine learning classifiers.
+- Soft-voting and majority-voting ensemble evaluation.
+- Model performance metrics, including accuracy, precision, recall, and F1 score.
+- Flask API for inference and model information.
+- Web interface for submitting text and exploring model performance.
+- Saved model and vectorizer artifacts for inference without retraining.
 
-# 2. news articles: put ONE OR BOTH of these in data/
-#      data/Fake.csv + data/True.csv        (ISOT / Kaggle "Fake and Real News")
-#      data/fake_or_real_news.csv           (title,text,label)
+## Technology Stack
 
-# 3. train  (≈4 min; writes artifacts/ which server.py reads)
-python train.py --csv data/fake_or_real_news.csv --liar-dir data/liar
-#   with ISOT:      python train.py --fake data/Fake.csv --true data/True.csv --liar-dir data/liar
-#   with both:      python train.py --csv data/fake_or_real_news.csv --fake data/Fake.csv --true data/True.csv --liar-dir data/liar
-#   add --ablate-preprocessing to also (re)run the validation-only preprocessing ablation
+| Component | Technology |
+|---|---|
+| Programming language | Python |
+| Data processing | pandas, NumPy |
+| Machine learning | scikit-learn |
+| Text representation | TF-IDF |
+| Model persistence | joblib |
+| Backend API | Flask |
+| Frontend | React, TypeScript, Vite |
+| Styling | Tailwind CSS |
 
-# 4. run
-python server.py            # http://localhost:5000
+## Datasets
+
+The project combines two sources with different text characteristics.
+
+**1. ISOT Fake News Dataset**
+
+Contains longer news articles labeled as fake or real. It provides article-level text for training and evaluation.
+
+**2. LIAR Benchmark Dataset**
+
+Contains short political claims with six original truthfulness ratings. For this project's binary classification task, the labels are mapped as follows:
+
+| Original label | Binary mapping |
+|---|---|
+| `pants-fire` | Fake |
+| `false` | Fake |
+| `barely-true` | Fake |
+| `half-true` | Excluded |
+| `mostly-true` | Real |
+| `true` | Real |
+
+This mapping simplifies a multi-level fact-checking task into binary classification. It also introduces limitations: a claim labeled `barely-true` may contain some accurate information, and the original ratings are not perfectly equivalent to binary truth.
+
+### Dataset preparation
+
+The data pipeline performs cleaning and normalization, handles duplicate and conflicting texts, removes unsuitable short or empty examples, and combines the retained records into a unified dataset.
+
+According to the latest project audit, the resulting dataset contains **48,279 cleaned examples**. The reported split is:
+
+| Subset | Examples | Purpose |
+|---|---:|---|
+| Training | 33,795 | Fit the vectorizer and train classifiers |
+| Validation | 7,242 | Model selection and hyperparameter tuning |
+| Held-out test | 7,242 | Final performance evaluation |
+| **Total** | **48,279** | |
+
+The split counts and dataset size should be regenerated from the actual data pipeline if the dataset changes.
+
+## Machine Learning Workflow
+
+1. **Data ingestion:** Load the ISOT and LIAR datasets.
+2. **Label normalization:** Convert the retained examples to binary real/fake labels.
+3. **Text preprocessing:** Normalize text and remove unsuitable records, duplicates, and conflicting examples.
+4. **Dataset splitting:** Create training, validation, and held-out test subsets.
+5. **Feature extraction:** Fit a TF-IDF vectorizer on the training data and transform the remaining subsets using the fitted vectorizer.
+6. **Model training:** Train seven classical machine learning classifiers.
+7. **Model selection:** Use validation results to compare models and configurations.
+8. **Evaluation:** Calculate performance metrics on held-out test data.
+9. **Ensemble evaluation:** Compare soft-voting and majority-voting strategies.
+10. **Deployment:** Save the trained artifacts and load them in the Flask application for predictions.
+
+### TF-IDF
+
+Term Frequency–Inverse Document Frequency (TF-IDF) converts text into numerical features that machine learning algorithms can process.
+
+It gives greater relative importance to terms that are informative for a document and less importance to terms that appear throughout many documents.
+
+The vectorizer is fitted on training text only to reduce the risk of data leakage.
+
+## Models
+
+The project evaluates seven classifiers:
+
+1. Logistic Regression
+2. Linear Support Vector Machine (SVM)
+3. Passive Aggressive Classifier
+4. Multinomial Naive Bayes
+5. Random Forest
+6. Decision Tree
+7. K-Nearest Neighbors (KNN)
+
+The algorithms learn different decision boundaries and make different assumptions about the data. Comparing them helps identify their relative strengths and weaknesses.
+
+### Ensemble strategies
+
+**Soft voting:** Combines the class probabilities produced by the participating classifiers and selects the class with the higher averaged probability.
+
+**Majority voting:** Combines the discrete predictions of the classifiers and selects the class receiving the most votes. With seven binary classifiers, four votes are sufficient for a majority.
+
+An ensemble is not guaranteed to outperform every individual classifier. Its performance must be measured on held-out data.
+
+## Evaluation Metrics
+
+The project uses four common classification metrics.
+
+- **Accuracy:** The proportion of all predictions that are correct.
+- **Precision:** The proportion of positive predictions that are correct.
+- **Recall:** The proportion of actual positive examples correctly identified.
+- **F1 score:** The harmonic mean of precision and recall.
+
+These metrics provide complementary information. Accuracy alone can conceal differences in false positives and false negatives.
+
+## Latest Reported Evaluation
+
+The latest evaluation report records the following results on a held-out test set of 7,242 examples.
+
+| Model | Accuracy |
+|---|---:|
+| Linear SVM | 90.57% |
+| Logistic Regression | 90.43% |
+| Random Forest | 90.02% |
+| Passive Aggressive | 89.78% |
+| Multinomial Naive Bayes | 87.82% |
+| Decision Tree | 86.85% |
+| KNN | 84.13% |
+| Soft-voting ensemble | 90.43% |
+| Majority-voting ensemble | 90.36% |
+
+These figures are the results reported by the latest project audit and should be kept synchronized with `artifacts/metrics.json`.
+
+### An important evaluation caveat
+
+Performance differs substantially by text length in the reported evaluation:
+
+- Long-form news articles: approximately 91–99% accuracy, depending on the classifier.
+- Short political claims: approximately 60–65% accuracy, depending on the classifier.
+
+The overall accuracy is influenced by the composition of the test set. Strong results on long articles should not be interpreted as equally strong performance on short claims.
+
+Potential reasons include limited context, differences in label definitions, dataset-source characteristics, and the difficulty of verifying nuanced statements from text alone. Further testing on independently sourced data is necessary to assess generalization.
+
+## Backend API
+
+The Flask backend exposes endpoints for the web application.
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/` | GET | Serves the application interface |
+| `/api/info` | GET | Returns dataset and model evaluation information |
+| `/api/example` | GET | Returns an example text |
+| `/api/predict` | POST | Predicts the class of submitted text |
+
+### Prediction request
+
+Send a JSON request to `/api/predict`:
+
+```json
+{
+  "text": "Insert a news article or claim here."
+}
 ```
 
-## Pipeline (train.py)
-load + label-normalise → de-duplicate / drop label conflicts / clean → stratified 70/15/15 train/val/test split
-→ TF-IDF fitted on **train only** → Naive Bayes, Logistic Regression, Linear SVM over a hyper-parameter grid and
-`min_df` ∈ {1, 2, 3} → selection on **validation** → one final evaluation on the untouched **test** set.
+The API validates the input, preprocesses the text, transforms it using the saved TF-IDF vectorizer, and obtains model predictions. The response contains the prediction, probability information, model votes, and other supported analysis fields.
 
-* **Selection rule:** validation score = 0.7 × macro-F1 on short claims + 0.3 × macro-F1 on long articles. No ensemble: the
-  single best model decides the verdict (`p_real` in the API). The other two are returned in `votes` for comparison only.
-* **Short vs long:** ≤ 60 raw words = short claim, otherwise long article. Metrics (accuracy, precision, recall, F1 with REAL
-  as positive class, macro-F1, ROC-AUC, confusion matrix `[[TN,FP],[FN,TP]]`) are stored for overall / short / long in
-  `artifacts/metrics.json`, together with the majority-class baseline.
-* **Leakage controls:** exact duplicates removed and texts carrying conflicting labels dropped *before* splitting (LIAR's own
-  split has 11 duplicate groups spanning train/valid/test, so it is re-split); vectoriser fitted on train only;
-  hyper-parameters chosen on validation only; test touched once; LIAR speaker/party/context/credit-history columns are not used.
+Inputs that are too short or contain no features recognized by the fitted vectorizer may be rejected.
 
-## LIAR → binary label mapping
-LIAR uses PolitiFact's six ratings. Default (`--liar-mapping drop-half`):
+## Model Artifacts
 
-| LIAR label | binary | reason |
-|---|---|---|
-| pants-fire, false | FAKE (0) | inaccurate |
-| barely-true | FAKE (0) | PolitiFact: contains an element of truth but ignores critical facts that give a different impression — misleading overall |
-| **half-true** | **dropped** | the genuine middle ("partially accurate"); forcing it to either side would add label noise |
-| mostly-true, true | REAL (1) | accurate (mostly-true "needs clarification") |
+The training pipeline saves artifacts used by the inference application. These may include:
 
-Alternatives for comparison: `--liar-mapping half-real` (half-true → REAL) and `half-fake` (half-true → FAKE).
-Consequence to be aware of: at inference the app must still answer for half-true-style claims — the 40–60 % "uncertain" band handles some of these.
+- `artifacts/models.joblib` — trained classifiers.
+- `artifacts/vectorizer.joblib` — fitted TF-IDF vectorizer.
+- `artifacts/metrics.json` — evaluation results and dataset metadata.
+- `artifacts/examples.json` — sample inputs for the interface.
 
-## Preprocessing (textutils.py, v2 — one function, `preprocess`, used by train and server)
-Negations kept (no, nor, not, never, none, nobody, nothing, nowhere, neither, cannot, without; `n't` expanded), a few
-quantifiers kept (all, any, few, more, most, only, than, against), numbers become class tokens (`_pct_`, `_money_`, `_year_`,
-`_num_`) instead of being deleted, `!`/`?` become tokens. `PREPROCESS_VERSION` is saved in `metrics.json`; `server.py`
-refuses to start if it differs from `textutils.py`. Validation-only ablation (`artifacts/preprocessing_ablation.json`,
-Logistic Regression, short / long macro-F1): v1 0.632 / 0.936 → +negations 0.629 / 0.933 → +quantifiers 0.640 / 0.936
-→ +numbers 0.646 / 0.933 → +`!?` 0.652 / 0.929. Negation alone is not a measurable win here (it is within noise); the gain on short claims comes mainly from numbers, quantifiers and punctuation.
+The training and serving pipelines must use compatible preprocessing logic and matching artifacts. After changing the data, preprocessing, or models, regenerate the relevant artifacts and rebuild the frontend if required.
 
-## Results (held-out test, 2,430 texts: 1,550 short / 880 long; selected = Logistic Regression C=10, min_df=1)
-| | accuracy | short claims | long articles |
-|---|---|---|---|
-| majority-class baseline | 53.8 % | 55.7 % | 50.3 % |
-| Naive Bayes | 70.7 % | 58.9 % | 91.4 % |
-| **Logistic Regression (selected)** | 73.1 % | 61.0 % | 94.5 % |
-| SVM (linear) | 73.4 % | 61.2 % | 94.8 % |
+## Running the Project
 
-Short-claim ROC-AUC is ≈ 0.63: fact-checked political claims are hard to judge from wording alone, and these numbers are in the
-range usually reported for text-only models on LIAR. The previous McIntire-only model scored 53.5 % on the same LIAR test
-claims (below the 55.5 % majority baseline); the new model scores 60.3 % on them. Logistic Regression and the linear SVM, and the three `min_df`
-values, are within about 0.004 of each other on validation, so that choice is not a strong one (Naive Bayes is clearly behind).
-The short slice is 98 % LIAR claims; the long slice contains only news articles.
+Run these commands from the directory containing the corresponding project files. If the repository's backend and frontend have been moved into separate folders, first navigate to the appropriate directory.
 
-## Files
-- `train.py` – pipeline above · `textutils.py` – preprocessing · `fetch_liar.py` – download + verify LIAR
-- `server.py` – Flask API (`/api/predict`, `/api/info`, `/api/example[?label=0|1&kind=short|long]`) · `static/index.html` – frontend
-- `artifacts/` – `models.joblib`, `vectorizer.joblib`, `metrics.json`, `examples.json`, `preprocessing_ablation.json`
+### 1. Set up Python
 
-The system scores writing style and vocabulary; it does not verify facts.
+```bash
+python -m venv .venv
+```
+
+On Windows Command Prompt:
+
+```bat
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### 2. Install frontend dependencies
+
+From the directory containing `package.json`:
+
+```bash
+npm install
+```
+
+### 3. Build the frontend
+
+```bash
+npm run build
+```
+
+### 4. Start the backend
+
+From the directory containing `server.py`:
+
+```bash
+python server.py
+```
+
+Open the local address printed by the Flask server. In the current configuration, the application uses `http://127.0.0.1:5000`.
+
+**Note:** Training is separate from running the application. If model artifacts already exist and match the current preprocessing version, retraining is not necessary just to launch the interface. If retraining is required, consult the current `train.py` command-line options and dataset requirements.
+
+## Limitations and Future Improvements
+
+- Improve performance on short political claims.
+- Evaluate on independent datasets from sources not used during training.
+- Investigate dataset and publisher-related biases.
+- Perform error analysis by text length, source, and class.
+- Explore more robust language representations and contextual NLP models.
+- Improve probability calibration and uncertainty handling.
+- Add evidence retrieval and source verification for stronger fact-checking capabilities.
+
+## Responsible Use
+
+The application provides a model-based prediction, not proof that a statement is true or false. Its output should support human review rather than replace independent source verification.
+
+## Project Purpose
+
+Get Legit demonstrates an end-to-end machine learning workflow, from dataset preparation and feature extraction to model evaluation, API integration, and an interactive frontend. It is intended for educational use and further experimentation in natural language processing and misinformation detection.
