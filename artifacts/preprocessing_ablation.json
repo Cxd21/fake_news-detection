@@ -1,0 +1,42 @@
+[
+ {
+  "variant": "v1: letters only, NLTK stop-words (negations dropped, numbers dropped)",
+  "short_macro_f1": 0.6316382839850472,
+  "short_accuracy": 0.6391752577319587,
+  "long_macro_f1": 0.9362024580634447,
+  "long_accuracy": 0.9362186788154897,
+  "score": 0.7230075362085664
+ },
+ {
+  "variant": "+ keep negations (not/no/never/...)",
+  "short_macro_f1": 0.6291687303157585,
+  "short_accuracy": 0.6372422680412371,
+  "long_macro_f1": 0.9327870873150257,
+  "long_accuracy": 0.9328018223234624,
+  "score": 0.7202542374155386
+ },
+ {
+  "variant": "+ keep quantifiers (all/any/most/only/...)",
+  "short_macro_f1": 0.6397234764419275,
+  "short_accuracy": 0.6481958762886598,
+  "long_macro_f1": 0.9362024580634447,
+  "long_accuracy": 0.9362186788154897,
+  "score": 0.7286671709283826
+ },
+ {
+  "variant": "+ numbers as tokens (_pct_/_money_/_year_/_num_)",
+  "short_macro_f1": 0.6464310032135925,
+  "short_accuracy": 0.6539948453608248,
+  "long_macro_f1": 0.9327766206632537,
+  "long_accuracy": 0.9328018223234624,
+  "score": 0.7323346884484908
+ },
+ {
+  "variant": "+ ! and ? as tokens  (= v2 production default)",
+  "short_macro_f1": 0.6520950580605739,
+  "short_accuracy": 0.6591494845360825,
+  "long_macro_f1": 0.9293670071416709,
+  "long_accuracy": 0.929384965831435,
+  "score": 0.7352766427849029
+ }
+]

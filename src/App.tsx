@@ -715,9 +715,6 @@ function Accuracy() {
             ))}
           </div>
 
-          <p className="mt-5 text-xs leading-5 text-[#7a8980]">
-            Performance figures reflect held-out test evaluation on {info?.dataset || "ISOT News + LIAR Benchmark (48.3k articles)"} ({evaluatedCount} test articles out of {totalCount} total clean articles; {trainCount} training articles). Combines long news articles (ISOT) and short claims (LIAR). Results should support, not replace, independent source verification.
-          </p>
         </div>
       </main>
       <Footer />
